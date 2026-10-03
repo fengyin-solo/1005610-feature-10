@@ -1,49 +1,167 @@
 import type { EntryRow } from './types'
+import {
+  ROOMTEMP_DETAIL_FIELD,
+  ROOMTEMP_SOURCE_FIELD,
+  ROOMTEMP_STATUS_COLLECTED,
+  ROOMTEMP_STATUS_QUALIFIED,
+  ROOMTEMP_STATUS_REVIEWING,
+  ROOMTEMP_STATUS_SUSPENDED,
+  ROOMTEMP_STATUS_UNQUALIFIED,
+  roomtempFlags,
+  serializeReadings,
+} from './roomtemp-rules'
+import type { StoredReading } from './roomtemp-rules'
+
+// 室温监测示例：按新口径保存日内多条采集记录，达标判定由 roomtemp-rules 统一加权计算。
+type RoomTempSeed = {
+  id: number
+  status: string
+  monitor: string
+  address: string
+  district: string
+  handler: string
+  readings: StoredReading[]
+}
+
+const ROOMTEMP_SEED_DEFS: RoomTempSeed[] = [
+  {
+    id: 1,
+    status: ROOMTEMP_STATUS_QUALIFIED,
+    monitor: 'ROOM-0001',
+    address: '和平里小区3号楼2单元501',
+    district: '城东片区',
+    handler: '王建国',
+    readings: [
+      { day: '2026-10-02', time: '06:00', value: 19.2, reviewed: true },
+      { day: '2026-10-02', time: '12:00', value: 20.8, reviewed: true },
+      { day: '2026-10-02', time: '18:00', value: 20.5, reviewed: true },
+    ],
+  },
+  {
+    id: 2,
+    status: ROOMTEMP_STATUS_UNQUALIFIED,
+    monitor: 'ROOM-0002',
+    address: '和平里小区5号楼1单元302',
+    district: '城东片区',
+    handler: '王建国',
+    readings: [
+      { day: '2026-10-02', time: '06:00', value: 16.4, reviewed: true },
+      { day: '2026-10-02', time: '12:00', value: 17.6, reviewed: true },
+      { day: '2026-10-02', time: '18:00', value: 17.2, reviewed: true },
+    ],
+  },
+  {
+    id: 3,
+    status: ROOMTEMP_STATUS_SUSPENDED,
+    monitor: 'ROOM-0003',
+    address: '西关正街12号院2号楼403',
+    district: '城西片区',
+    handler: '李秀兰',
+    readings: [
+      { day: '2026-10-02', time: '08:00', value: 19.0, reviewed: false },
+      { day: '2026-10-02', time: '14:00', value: 55.8, reviewed: false },
+    ],
+  },
+  {
+    id: 4,
+    status: ROOMTEMP_STATUS_COLLECTED,
+    monitor: 'ROOM-0004',
+    address: '西关正街12号院3号楼101',
+    district: '城西片区',
+    handler: '',
+    readings: [],
+  },
+  {
+    id: 5,
+    status: ROOMTEMP_STATUS_REVIEWING,
+    monitor: 'ROOM-0005',
+    address: '北苑家园7号楼3单元602',
+    district: '城北片区',
+    handler: '',
+    readings: [
+      { day: '2026-10-02', time: '07:00', value: 18.6, reviewed: false },
+      { day: '2026-10-02', time: '13:00', value: 20.4, reviewed: false },
+      { day: '2026-10-02', time: '19:00', value: 19.8, reviewed: false },
+    ],
+  },
+  {
+    id: 6,
+    status: ROOMTEMP_STATUS_REVIEWING,
+    monitor: 'ROOM-0006',
+    address: '北苑家园9号楼2单元201',
+    district: '城北片区',
+    handler: '',
+    readings: [
+      { day: '2026-10-02', time: '07:00', value: 17.2, reviewed: false },
+      { day: '2026-10-02', time: '13:00', value: 18.2, reviewed: false },
+      { day: '2026-10-02', time: '19:00', value: 17.9, reviewed: false },
+    ],
+  },
+]
+
+const ROOMTEMP_SEED_ROWS: EntryRow[] = ROOMTEMP_SEED_DEFS.map((item) => {
+  const flags = roomtempFlags(item.status)
+  return {
+    id: item.id,
+    status: item.status,
+    pending: flags.pending,
+    abnormal: flags.abnormal,
+    监测编号: item.monitor,
+    住户地址: item.address,
+    所属片区: item.district,
+    室温读数: '—',
+    采集时间: '—',
+    达标判定: '',
+    处理人: item.handler,
+    监测状态: item.status,
+    [ROOMTEMP_DETAIL_FIELD]: serializeReadings(item.readings),
+  }
+})
 
 // 示例数据：首次打开时播种，之后浏览器里的改动优先，重置才会回到这份。
 export const SEED_ROWS: Record<string, EntryRow[]> = {
   "heatstation": [
     {
       "id": 1,
-      "status": "待投运",
-      "pending": true,
+      "status": "运行中",
+      "pending": false,
       "abnormal": false,
-      "站名": "换热站台账样例1",
-      "所属片区": "换热站台账样例1",
-      "供热面积": "换热站台账样例1",
-      "换热机组数": "换热站台账样例1",
+      "站名": "城东换热站",
+      "所属片区": "城东片区",
+      "供热面积": 86.5,
+      "换热机组数": 4,
       "投运日期": "2026-09-01",
-      "站长": "换热站台账样例1",
-      "设计负荷": "换热站台账样例1",
-      "站点状态": "换热站台账样例1"
+      "站长": "王建国",
+      "设计负荷": 42.0,
+      "站点状态": "运行中"
     },
     {
       "id": 2,
       "status": "运行中",
-      "pending": true,
-      "abnormal": true,
-      "站名": "换热站台账样例2",
-      "所属片区": "换热站台账样例2",
-      "供热面积": "换热站台账样例2",
-      "换热机组数": "换热站台账样例2",
-      "投运日期": "2026-09-02",
-      "站长": "换热站台账样例2",
-      "设计负荷": "换热站台账样例2",
-      "站点状态": "换热站台账样例2"
+      "pending": false,
+      "abnormal": false,
+      "站名": "城西换热站",
+      "所属片区": "城西片区",
+      "供热面积": 72.3,
+      "换热机组数": 3,
+      "投运日期": "2026-09-01",
+      "站长": "李秀兰",
+      "设计负荷": 35.5,
+      "站点状态": "运行中"
     },
     {
       "id": 3,
-      "status": "已停运",
+      "status": "运行中",
       "pending": false,
       "abnormal": false,
-      "站名": "换热站台账样例3",
-      "所属片区": "换热站台账样例3",
-      "供热面积": "换热站台账样例3",
-      "换热机组数": "换热站台账样例3",
-      "投运日期": "2026-09-03",
-      "站长": "换热站台账样例3",
-      "设计负荷": "换热站台账样例3",
-      "站点状态": "换热站台账样例3"
+      "站名": "城北换热站",
+      "所属片区": "城北片区",
+      "供热面积": 64.8,
+      "换热机组数": 3,
+      "投运日期": "2026-09-02",
+      "站长": "赵德海",
+      "设计负荷": 30.0,
+      "站点状态": "运行中"
     }
   ],
   "primarynet": [
@@ -178,50 +296,7 @@ export const SEED_ROWS: Record<string, EntryRow[]> = {
       "巡检状态": "站点巡检样例3"
     }
   ],
-  "roomtemp": [
-    {
-      "id": 1,
-      "status": "待采集",
-      "pending": true,
-      "abnormal": false,
-      "监测编号": "ROOM-0001",
-      "住户地址": "室温监测样例1",
-      "所属片区": "室温监测样例1",
-      "室温读数": "室温监测样例1",
-      "采集时间": "2026-09-01",
-      "达标判定": "室温监测样例1",
-      "处理人": "室温监测样例1",
-      "监测状态": "室温监测样例1"
-    },
-    {
-      "id": 2,
-      "status": "已采集",
-      "pending": true,
-      "abnormal": true,
-      "监测编号": "ROOM-0002",
-      "住户地址": "室温监测样例2",
-      "所属片区": "室温监测样例2",
-      "室温读数": "室温监测样例2",
-      "采集时间": "2026-09-02",
-      "达标判定": "室温监测样例2",
-      "处理人": "室温监测样例2",
-      "监测状态": "室温监测样例2"
-    },
-    {
-      "id": 3,
-      "status": "已达标",
-      "pending": false,
-      "abnormal": false,
-      "监测编号": "ROOM-0003",
-      "住户地址": "室温监测样例3",
-      "所属片区": "室温监测样例3",
-      "室温读数": "室温监测样例3",
-      "采集时间": "2026-09-03",
-      "达标判定": "室温监测样例3",
-      "处理人": "室温监测样例3",
-      "监测状态": "室温监测样例3"
-    }
-  ],
+  "roomtemp": ROOMTEMP_SEED_ROWS,
   "hydraulic": [
     {
       "id": 1,
@@ -757,13 +832,14 @@ export const SEED_ROWS: Record<string, EntryRow[]> = {
       "pending": true,
       "abnormal": false,
       "服务单号": "HOUS-0001",
-      "报修用户": "入户服务样例1",
-      "服务内容": "入户服务样例1",
-      "受理人": "入户服务样例1",
-      "上门时间": "2026-09-01",
-      "处理结果": "入户服务样例1",
-      "回访日期": "2026-09-01",
-      "服务状态": "入户服务样例1"
+      "报修用户": "和平里小区5号楼1单元302",
+      "服务内容": "室温不达标入户服务（监测编号ROOM-0002，2026-10-02 日加权17.1℃，低于合格范围18~24℃）",
+      "受理人": "待派单",
+      "上门时间": "",
+      "处理结果": "",
+      "回访日期": "",
+      "服务状态": "待受理",
+      [ROOMTEMP_SOURCE_FIELD]: "ROOM-0002@2026-10-02"
     },
     {
       "id": 2,

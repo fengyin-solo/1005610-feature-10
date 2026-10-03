@@ -3,7 +3,7 @@
     <header class="page-head">
       <div>
         <h2>换热站台账管理</h2>
-        <p class="page-desc">维护换热站，围绕站名、所属片区、供热面积、换热机组数做登记、筛选与状态流转。</p>
+        <p class="page-desc">维护换热站，围绕站名、所属片区、供热面积、换热机组数做登记、筛选与状态流转。换热站值班员按所属片区复核室温监测读数。</p>
       </div>
       <div class="page-actions">
         <button class="btn primary" type="button" @click="openCreate">登记换热站</button>
@@ -55,6 +55,7 @@
             >
               {{ action }}
             </button>
+            <button class="link" type="button" @click="openReview(row)">片区复核室温读数</button>
           </td>
         </tr>
         <tr v-if="!rows.length">
@@ -66,7 +67,60 @@
     <footer class="page-foot">
       <span>共 {{ total }} 条换热站台账记录</span>
       <span v-if="errorMessage" class="error-text">{{ errorMessage }}</span>
+      <span v-else-if="successMessage" class="success-text">{{ successMessage }}</span>
     </footer>
+
+    <div v-if="reviewOpen" class="modal-mask" @click.self="closeReview">
+      <div class="modal wide">
+        <h3>片区复核室温读数 · {{ reviewDistrict }}</h3>
+        <p class="page-desc">
+          复核人：{{ reviewer }}。复核按新口径自动落判定：日加权 18~24℃ 判达标，其余判不达标；
+          读数超 0~50℃ 量程的保持挂起；不达标自动转入入户服务待上门清单。
+        </p>
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>监测编号</th>
+              <th>住户地址</th>
+              <th>室温读数</th>
+              <th>采集时间</th>
+              <th>达标判定</th>
+              <th>当前状态</th>
+              <th>操作</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="row in reviewQueue" :key="String(row.id)">
+              <td>{{ row.监测编号 }}</td>
+              <td>{{ row.住户地址 }}</td>
+              <td>{{ row.室温读数 }}</td>
+              <td>{{ row.采集时间 }}</td>
+              <td>{{ row.达标判定 }}</td>
+              <td>{{ row.status }}</td>
+              <td class="row-actions">
+                <button
+                  v-if="String(row.status) === '待复核'"
+                  class="link"
+                  type="button"
+                  @click="reviewOne(row)"
+                >
+                  通过复核
+                </button>
+                <span v-else class="muted-text">已挂起，待有效补采</span>
+              </td>
+            </tr>
+            <tr v-if="!reviewQueue.length">
+              <td colspan="7" class="empty-state">该片区当前没有待复核或已挂起的监测点</td>
+            </tr>
+          </tbody>
+        </table>
+        <div class="modal-actions">
+          <button class="btn primary" type="button" @click="reviewAll">一键复核本片区全部待复核点位</button>
+          <span class="spacer"></span>
+          <button class="btn ghost" type="button" @click="closeReview">关闭</button>
+        </div>
+      </div>
+    </div>
   </section>
 </template>
 
@@ -77,8 +131,11 @@ import {
   downloadEntries,
   listEntries,
   moduleMeta,
+  reviewRoomTempDistrict,
+  roomtempDistrictQueue,
   runAction as applyAction,
 } from '@/api/local-service'
+import { useSessionStore } from '@/stores/session'
 import type { EntryRow } from '@/data/types'
 
 const meta = moduleMeta('heatstation')
@@ -87,9 +144,13 @@ const actions = ["提交投运", "登记停运", "办理移交"]
 const statuses = ["待投运", "运行中", "已停运", "已移交"]
 const stats = [{"label": "运行中站点", "value": 0}, {"label": "待投运站点", "value": 0}, {"label": "累计供热面积", "value": 0}]
 
+const session = useSessionStore()
+const reviewer = computed(() => `${session.operator}（换热站值班员）`)
+
 const rows = ref<EntryRow[]>([])
 const total = ref(0)
 const errorMessage = ref('')
+const successMessage = ref('')
 const filters = ref<Record<string, string>>({})
 const filterFields = columns.slice(0, 3)
 const statusSummary = computed(() =>
@@ -98,6 +159,10 @@ const statusSummary = computed(() =>
     count: rows.value.filter((row) => String(row.status) === status).length,
   })),
 )
+
+const reviewOpen = ref(false)
+const reviewDistrict = ref('')
+const reviewQueue = ref<EntryRow[]>([])
 
 function resetFilters() {
   filters.value = {}
@@ -114,12 +179,55 @@ function openCreate() {
 
 function runAction(action: string, row: EntryRow) {
   errorMessage.value = ''
+  successMessage.value = ''
   const result = applyAction(meta.key, Number(row.id), action)
   if (!result.ok) {
     errorMessage.value = result.message
     return
   }
+  successMessage.value = result.message
   reload()
+}
+
+function openReview(row: EntryRow) {
+  reviewDistrict.value = String(row.所属片区 ?? '')
+  errorMessage.value = ''
+  refreshReviewQueue()
+  reviewOpen.value = true
+}
+
+function refreshReviewQueue() {
+  reviewQueue.value = roomtempDistrictQueue(reviewDistrict.value)
+}
+
+function closeReview() {
+  reviewOpen.value = false
+  reviewDistrict.value = ''
+  reviewQueue.value = []
+  reload()
+}
+
+function reviewOne(row: EntryRow) {
+  errorMessage.value = ''
+  successMessage.value = ''
+  const result = applyAction('roomtemp', Number(row.id), '片区复核')
+  if (!result.ok) {
+    errorMessage.value = result.message
+    return
+  }
+  successMessage.value = result.message
+  refreshReviewQueue()
+}
+
+function reviewAll() {
+  errorMessage.value = ''
+  const result = reviewRoomTempDistrict(reviewDistrict.value, reviewer.value)
+  if (!result.ok) {
+    errorMessage.value = result.message
+    return
+  }
+  successMessage.value = result.message
+  refreshReviewQueue()
 }
 
 function reload() {

@@ -3,7 +3,7 @@
     <header class="page-head">
       <div>
         <h2>入户服务管理</h2>
-        <p class="page-desc">维护入户服务单，围绕服务单号、报修用户、服务内容、受理人做登记、筛选与状态流转。</p>
+        <p class="page-desc">维护入户服务单，围绕服务单号、报修用户、服务内容、受理人做登记、筛选与状态流转。室温监测不达标的结果会自动落到待上门清单，同一监测点同一天只生成一张单。</p>
       </div>
       <div class="page-actions">
         <button class="btn primary" type="button" @click="openCreate">登记入户服务单</button>
@@ -85,13 +85,17 @@ const meta = moduleMeta('householdservice')
 const columns = ["服务单号", "报修用户", "服务内容", "受理人", "上门时间", "处理结果", "回访日期", "服务状态"]
 const actions = ["受理报修", "登记处理", "完成回访"]
 const statuses = ["待受理", "已安排", "已处理", "已回访"]
-const stats = [{"label": "待受理服务单", "value": 0}, {"label": "已处理服务单", "value": 0}, {"label": "待回访服务单", "value": 0}]
 
 const rows = ref<EntryRow[]>([])
 const total = ref(0)
 const errorMessage = ref('')
 const filters = ref<Record<string, string>>({})
 const filterFields = columns.slice(0, 3)
+const stats = computed(() => [
+  { label: '待上门服务单（待受理）', value: rows.value.filter((row) => String(row.status) === '待受理').length },
+  { label: '已安排待上门', value: rows.value.filter((row) => String(row.status) === '已安排').length },
+  { label: '已办结（已处理/已回访）', value: rows.value.filter((row) => ['已处理', '已回访'].includes(String(row.status))).length },
+])
 const statusSummary = computed(() =>
   statuses.map((status: string) => ({
     status,
