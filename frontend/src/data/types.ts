@@ -30,6 +30,14 @@ export type PageResult = {
 export type ActionResult = {
   ok: boolean
   message: string
+  /** 动作联动生成的关联单据（如不达标生成的入户服务单） */
+  ticketId?: number
+}
+
+/** 动作执行上下文：当前值班员与其所属片区，用于片区复核权限。 */
+export type ActionContext = {
+  operator?: string
+  area?: string
 }
 
 export type OverviewResult = {
